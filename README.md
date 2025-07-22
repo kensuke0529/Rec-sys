@@ -17,4 +17,5 @@ Suggest movies based on the movies' overview + genres and user prompt using Hugg
 4. PyTorch.ipynb
 
 A semantic movie recommendation system using pytorch
-Deployed by FastAPi: http://127.0.0.1:8000/docs
+
+5. Deployed by FastAPi (/app/app.py)
