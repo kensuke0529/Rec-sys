@@ -10,8 +10,8 @@ import numpy as np
 
 from sentence_transformers import SentenceTransformer, util
 
-# --- Model class ---
 
+# --- Model class ---
 class RecSysModel(nn.Module):
     def __init__(self, n_users, n_items, n_genres, embedding_dim=32):
         super(RecSysModel, self).__init__()
@@ -59,7 +59,6 @@ class RecSysModel(nn.Module):
 
 
 # --- Utility to load pickle files ---
-
 def load_pickle(filepath):
     try:
         with open(filepath, 'rb') as f:
@@ -69,24 +68,24 @@ def load_pickle(filepath):
         raise
 
 
-# --- Paths and loading encoders/scaler ---
-
+# --- Setup paths ---
 base_dir = os.path.dirname(os.path.abspath(__file__))
 
+# Load encoders, scaler, and genre mapping
 user_enc = load_pickle(os.path.join(base_dir, '../model/user_enc.pkl'))
 item_enc = load_pickle(os.path.join(base_dir, '../model/item_enc.pkl'))
 scaler = load_pickle(os.path.join(base_dir, '../model/scaler.pkl'))
 genre2idx = load_pickle(os.path.join(base_dir, '../model/genre2idx.pkl'))
 
-# --- Load movie_df and preprocess ---
-
+# Load movie metadata
 movie_df = pd.read_parquet(os.path.join(base_dir, '../data/movie_data.parquet'))
 
+# --- Data preprocessing ---
 def parse_genres(genre_str):
     try:
         genres = ast.literal_eval(genre_str)
         return [g['name'] for g in genres]
-    except:
+    except Exception:
         return []
 
 movie_df['genres_list'] = movie_df['genres'].apply(parse_genres)
@@ -101,28 +100,33 @@ def multi_hot_encode(genres, genre2idx):
 movie_df['genre_vector'] = movie_df['genres_list'].apply(lambda g: multi_hot_encode(g, genre2idx))
 movie_df = movie_df.drop_duplicates(subset='title')
 
+# Scale numerical features
 scaled_vals = scaler.transform(movie_df[['vote_average', 'vote_count', 'popularity']])
 movie_df[['vote_avg', 'vote_cnt', 'popularity_scaled']] = scaled_vals
 
+# Encode titles
 movie_df['title_enc'] = item_enc.transform(movie_df['title'])
 
+# Model params
 n_users = len(user_enc.classes_)
 n_items = len(item_enc.classes_)
 n_genres = len(genre2idx)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+# Load model
 model = RecSysModel(n_users, n_items, n_genres)
 model_path = os.path.join(base_dir, '../model/best_model.pth')
 model.load_state_dict(torch.load(model_path, map_location=device))
 model.to(device)
 model.eval()
 
-corr = pd.read_parquet('../data/item_based_corr_full.parquet')
-df = pd.read_parquet('../data/movie_data_processed.parquet')
+# Load correlation and processed movie data with absolute paths
+corr = pd.read_parquet(os.path.join(base_dir, '../data/item_based_corr_full.parquet'))
+df = pd.read_parquet(os.path.join(base_dir, '../data/movie_data_processed.parquet'))
 
-# --- Item based recommendation function ---
 
+# --- Item-based recommendation function ---
 def item_based_rec(title, top_n=9):
     try:
         if title not in corr.columns:
@@ -149,7 +153,6 @@ def item_based_rec(title, top_n=9):
 
 
 # --- Content-based recommendation setup ---
-
 df1 = df[['title','overview','genres','poster_path','vote_average','vote_count']].copy()
 df1['genres'] = df1['genres'].astype(str)
 df1 = df1.drop_duplicates().reset_index(drop=True)
@@ -158,15 +161,17 @@ def load_movie_embeddings(path):
     movie_embeddings_np = np.load(path).astype(np.float32)
     return torch.from_numpy(movie_embeddings_np)
 
-movie_embeddings = load_movie_embeddings('../model/movie_embeddings.npy')
+movie_embeddings = load_movie_embeddings(os.path.join(base_dir, '../model/movie_embeddings.npy'))
 movie_embeddings = movie_embeddings.to(device)
 
 embedding_model = SentenceTransformer('all-mpnet-base-v2')
 
-# Check alignment between embeddings and df1 on startup
+# Check embeddings alignment
 if movie_embeddings.shape[0] != len(df1):
-    raise RuntimeError(f"[FATAL] movie_embeddings length {movie_embeddings.shape[0]} != df1 rows {len(df1)}. "
-                       "Regenerate embeddings to match the dataset.")
+    raise RuntimeError(
+        f"[FATAL] movie_embeddings length {movie_embeddings.shape[0]} != df1 rows {len(df1)}. "
+        "Regenerate embeddings to match the dataset."
+    )
 
 def recommend_movies(prompt, top_k=10, vote_threshold=150):
     try:
@@ -202,15 +207,20 @@ def recommend_movies(prompt, top_k=10, vote_threshold=150):
 
 
 # --- FastAPI app and routes ---
-
 app = FastAPI()
 
 @app.get("/user_recommend/{user_id}")
 def recommend(user_id: int, top_k: int = 10):
-    if user_id not in user_enc.classes_:
+    # Check user exists in encoder classes, note type consistency
+    # If user_enc.classes_ are strings, cast user_id to str
+    user_classes = user_enc.classes_
+    if user_id not in user_classes and str(user_id) not in user_classes:
         raise HTTPException(status_code=404, detail="User not found")
 
-    user_idx = user_enc.transform([user_id])[0]
+    # Use appropriate type for transform
+    transform_val = user_id if user_id in user_classes else str(user_id)
+    user_idx = user_enc.transform([transform_val])[0]
+
     item_indices = torch.tensor(movie_df['title_enc'].values, dtype=torch.long).to(device)
     user_indices = torch.tensor([user_idx] * len(movie_df), dtype=torch.long).to(device)
 
@@ -254,7 +264,7 @@ def combined_recommendation(input_text: str = Query(..., description="Movie titl
             print(f"[INFO] Item-based rec for title: '{input_text_clean}'")
             result = item_based_rec(input_text_clean)
             print(f"[INFO] Item-based rec result count: {len(result)}")
-            return result.to_dict(orient='records')  # Return as JSON serializable dict
+            return result.to_dict(orient='records')  # JSON serializable
         else:
             print(f"[INFO] Content-based rec for prompt: '{input_text_clean}'")
             result = recommend_movies(input_text_clean)
@@ -263,4 +273,3 @@ def combined_recommendation(input_text: str = Query(..., description="Movie titl
     except Exception as e:
         print(f"[ERROR] combined_recommendation failed: {e}")
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
-
