@@ -1,6 +1,5 @@
 # 🎬 Movie Recommendation System
 
-**Live Demo (currently working on):** []
 
 **Video Demo:** 
 
@@ -8,7 +7,7 @@
 
 ## Overview
 
-This project develops a sophisticated **hybrid movie recommendation system** designed to enhance user experience by providing personalized and relevant movie suggestions. It leverages a combination of **collaborative filtering**, **content-based filtering (semantic search)**, and **deep learning techniques**, all deployed via a **FastAPI microservice**.
+This project develops a **hybrid movie recommendation system** designed to enhance user experience by providing personalized and relevant movie suggestions. It leverages a combination of **collaborative filtering**, **content-based filtering (semantic search)**, and **deep learning techniques**, all deployed via a **FastAPI microservice**.
 
 **Key Features:**
 
@@ -23,7 +22,6 @@ This project develops a sophisticated **hybrid movie recommendation system** des
 This system aims to:
 * **Improve User Engagement:** By suggesting highly relevant movies, keeping users on the platform longer.
 * **Enhance Content Discovery:** Helping users find new movies based on other users' behavior and prompt, going beyond traditional static recommendations by incorporating interaction and behavioral influence.
-* **Showcase Advanced ML/Deployment Skills:** Provides a comprehensive example of building, training, and deploying a complex machine learning system.
 
 ## Technical Architecture
 
@@ -40,11 +38,36 @@ This project is built around three core recommendation approaches, integrated in
     * **Architecture:** Concatenates user and movie embeddings with processed numerical and genre features, feeding them into a multi-layered perceptron (MLP) for final rating prediction.
     * **Training:** Optimized using Adam with Mean Squared Error (MSE) loss. Achieved **RMSE of 0.87 and MAE of 0.67** on the validation set. (Rating is from 0.5 to 5.0)
 
+    Example: 
+    | ID     | Title                  | Predicted Rating | Vote Average | Vote Count | Popularity | Genres                                  |
+    |--------|------------------------|------------------|---------------|-------------|------------|------------------------------------------|
+    | 9528   | The Shawshank Redemption | 4.238797        | 8.5           | 8358        | 51.645403 | Drama, Crime                             |
+    | 92848  | Inglourious Basterds   | 4.168882          | 7.9           | 6598        | 16.895640 | Drama, Action, Thriller, War             |
+ 
+
 ### 2. LLM-Powered Content-Based Recommendation (for Semantic Search)
 * **Objective:** Recommend movies based on semantic similarity to a user's free-form text query (e.g., "bleak dystopian sci-fi").
 * **Technique:** Leverages pre-trained transformer models for natural language understanding.
 * **Model:** `SentenceTransformer` model (`all-mpnet-base-v2`) to generate dense, fixed-size **embeddings** for movie overviews and genres.
 * **Similarity:** Cosine similarity is used to find the most semantically similar movie embeddings to the input query embedding.
+
+
+## Semantic Recommender Example
+### Code:
+
+```python
+prompt = "It’s really bleak and dystopian, set in a totalitarian future where everything is monitored, and people aren't allowed to think freely"
+recommend_books(prompt)
+```
+
+### Result:
+| Title                | Similarity | Overview                                                                                   | Vote Average | Vote Count |
+|----------------------|------------|---------------------------------------------------------------------------------------------|---------------|-------------|
+| The Lives of Others  | 0.577012   | A tragic love story set in East Berlin with themes of surveillance.                        | 7.9           | 977         |
+| Nineteen Eighty-Four | 0.566651   | George Orwell's novel of a totalitarian future where freedom is crushed.                   | 6.8           | 311         |
+| Following            | 0.543670   | A struggling, unemployed young writer takes to shadowing strangers for inspiration...      | 7.2           | 363         |
+
+
 
 ### 3. Item-Based Collaborative Filtering (for "More Like This")
 * **Objective:** Suggest movies similar to a given movie based on co-ratings from users.
@@ -97,7 +120,7 @@ The FastAPI service exposes the following endpoints:
         ]
         ```
 
-## 🚀 Getting Started
+## Getting Started
 
 This section will guide you through setting up and running the FastAPI application locally to interact with the movie recommendation system. **No GPU is required to run the API,** as all machine learning models and embeddings are pre-trained and included in the repository.
 
